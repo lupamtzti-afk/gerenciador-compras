@@ -366,7 +366,7 @@ var REL_CONFIG={
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
 function todayISO(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function pad(n){return String(n).padStart(2,'0')}
-function isoToDisp(s){if(!s)return'—';var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]}
+function isoToDisp(s){if(!s)return'—';if(/^\d{4}-\d{2}-\d{2}$/.test(s)){var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0]}var d=new Date(s);if(!isNaN(d.getTime()))return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear();return'—'}
 function isComplete(r){return r.rec==='done'&&r.lan==='done'}
 function fmtBRL(n){return'R$ '+Number(n).toFixed(2).replace('.',',').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
 function showToast(msg,err){var t=document.getElementById('toast');document.getElementById('toast-msg').textContent=msg;t.style.background=err?'#cc3333':'#24365e';t.style.display='flex';setTimeout(function(){t.style.display='none'},3000)}

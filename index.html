@@ -181,6 +181,14 @@ html,body{background:#d6deeb;font-family:-apple-system,BlinkMacSystemFont,'Segoe
 .export-btn.xls:hover{background:#1d6e3c;border-color:#1d6e3c}
 #toast{display:none;position:fixed;bottom:24px;right:24px;z-index:99999;background:#24365e;color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;font-weight:600;align-items:center;gap:8px;box-shadow:0 4px 16px rgba(36,54,94,.3)}
 .loading-bar{height:3px;background:#a8d18d;position:fixed;top:0;left:0;z-index:99998;transition:width .4s;width:0}
+.attach-zone{border:1px dashed #c9d1de;border-radius:7px;padding:9px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;color:#8fa0b8;transition:all .15s;background:#fafbfc}
+.attach-zone:hover{border-color:#24365e;color:#24365e;background:#f0f4fa}
+.attach-zone.has-file{border-color:#6ab350;border-style:solid;background:#f5fbf2;color:#1a4a0a}
+.attach-zone i{font-size:15px;flex-shrink:0}
+.attach-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.attach-rmv{margin-left:4px;background:none;border:none;cursor:pointer;color:#cc3333;display:none;align-items:center;padding:2px 4px;border-radius:4px;flex-shrink:0}
+.attach-rmv:hover{background:#ffe0e0}.attach-rmv i{font-size:13px}
+.attach-input{display:none}
 </style>
 </head>
 <body>
@@ -315,6 +323,24 @@ html,body{background:#d6deeb;font-family:-apple-system,BlinkMacSystemFont,'Segoe
       </div>
     </div>
     <div class="fld"><label>Previsão de Entrega</label><input type="date" id="f-previsao" style="width:100%;padding:8px 11px;border:1px solid #c9d1de;border-radius:7px;font-size:13px;color:#24365e;background:#fff;outline:none;font-family:inherit"></div>
+    <div class="fld">
+      <label>Nota Fiscal</label>
+      <div class="attach-zone" id="nf-zone" onclick="document.getElementById('f-nf').click()">
+        <i class="ti ti-file-invoice"></i>
+        <span class="attach-name" id="nf-label">Clique para anexar (PDF, imagem)</span>
+        <button class="attach-rmv" id="nf-rmv" onclick="event.stopPropagation();removeAttach('nf')"><i class="ti ti-x"></i></button>
+      </div>
+      <input type="file" id="f-nf" class="attach-input" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFileSelect(this,'nf')">
+    </div>
+    <div class="fld">
+      <label>Boleto</label>
+      <div class="attach-zone" id="boleto-zone" onclick="document.getElementById('f-boleto').click()">
+        <i class="ti ti-receipt"></i>
+        <span class="attach-name" id="boleto-label">Clique para anexar (PDF, imagem)</span>
+        <button class="attach-rmv" id="boleto-rmv" onclick="event.stopPropagation();removeAttach('boleto')"><i class="ti ti-x"></i></button>
+      </div>
+      <input type="file" id="f-boleto" class="attach-input" accept=".pdf,.png,.jpg,.jpeg" onchange="handleFileSelect(this,'boleto')">
+    </div>
     <div class="modal-ftr"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="btn-modal-save" onclick="saveReq()">Salvar</button></div>
   </div>
 </div>
@@ -348,6 +374,8 @@ html,body{background:#d6deeb;font-family:-apple-system,BlinkMacSystemFont,'Segoe
 <script>
 var API='https://script.google.com/macros/s/AKfycbyC_6CzYUPY0WNICCX0UpcD_2RsaEaXx0f4HDyzpp1ZZgozHeuNHncG3alGURcGHV_e/exec';
 var reqs=[],fornecedores=[],savings=[],editId=null,selDate=null,indFilter='todos',chartInstance=null,currentDays=30;
+var attachments={};try{attachments=JSON.parse(localStorage.getItem('gc_attachments')||'{}')}catch(e){}
+var pendingAttach={};
 var calY=new Date().getFullYear(),calM=new Date().getMonth();
 var MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 var MS=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -373,6 +401,12 @@ function showToast(msg,err){var t=document.getElementById('toast');document.getE
 function setLoadingBar(on){var b=document.getElementById('loading-bar');b.style.width=on?'70%':'100%';if(!on)setTimeout(function(){b.style.width='0'},500)}
 function setSyncStatus(s){var el=document.getElementById('sync-status');if(!el)return;var map={ok:['sync-status ok','ti-cloud-check','Salvo no Sheets'],err:['sync-status err','ti-cloud-off','Erro de conexão'],loading:['sync-status','ti-cloud','Sincronizando...']};var v=map[s]||map['loading'];el.className=v[0];el.innerHTML='<i class="ti '+v[1]+'"></i> '+v[2]}
 function setBtnLoading(id,on){var b=document.getElementById(id);if(b){b.disabled=on;b.textContent=on?'Salvando...':'Salvar'}}
+function saveAttachments(){try{localStorage.setItem('gc_attachments',JSON.stringify(attachments))}catch(e){showToast('Arquivo muito grande para armazenar!',true)}}
+function handleFileSelect(input,type){var file=input.files[0];if(!file)return;if(file.size>8*1024*1024){showToast('Arquivo muito grande! Máx 8MB.',true);input.value='';return}var reader=new FileReader();reader.onload=function(e){pendingAttach[type]={name:file.name,data:e.target.result};updateAttachZone(type,file.name)};reader.readAsDataURL(file)}
+function updateAttachZone(type,name){var zone=document.getElementById(type+'-zone'),lbl=document.getElementById(type+'-label'),btn=document.getElementById(type+'-rmv');if(!zone)return;if(name){zone.classList.add('has-file');lbl.textContent=name;btn.style.display='flex'}else{zone.classList.remove('has-file');lbl.textContent='Clique para anexar (PDF, imagem)';btn.style.display='none'}}
+function removeAttach(type){delete pendingAttach[type];document.getElementById('f-'+type).value='';updateAttachZone(type,null);if(editId&&attachments[editId]){delete attachments[editId][type];saveAttachments();render()}}
+function openAttachment(id,type){var att=attachments[id]&&attachments[id][type];if(!att)return;var a=document.createElement('a');a.href=att.data;a.download=att.name;a.click()}
+function attBtns(id){var nf=attachments[id]&&attachments[id].nf,bol=attachments[id]&&attachments[id].boleto;var s='';if(nf)s+='<button class="icn-btn" onclick="openAttachment(\''+id+'\',\'nf\')" title="NF: '+nf.name+'" style="color:#1d6e3c"><i class="ti ti-file-invoice"></i></button>';if(bol)s+='<button class="icn-btn" onclick="openAttachment(\''+id+'\',\'boleto\')" title="Boleto: '+bol.name+'" style="color:#24365e"><i class="ti ti-receipt"></i></button>';return s}
 
 function apiCall(body,cb,attempt){
   attempt = attempt || 1;
@@ -430,10 +464,10 @@ function renderTabs(v){document.getElementById('tabs').innerHTML=(TAB_MAP[v]||['
 function pillHTML(val,id,field){var cls=val==='done'?'done':'pending',icon=val==='done'?'ti-check':'ti-clock',lbl=val==='done'?'Concluído':'Pendente';return'<button class="pill '+cls+'" onclick="toggleStatus(\''+id+'\',\''+field+'\')"><i class="ti '+icon+'"></i>'+lbl+'</button>'}
 function situacaoHTML(r){if(isComplete(r))return'<span class="fin-badge"><i class="ti ti-circle-check"></i>Finalizado</span>';return'<span style="font-size:11px;color:#8fa0b8">Em andamento</span>'}
 function descHTML(d){return d?'<span class="desc-cell" title="'+d.replace(/"/g,'&quot;')+'">'+d+'</span>':'<span class="desc-cell empty">—</span>'}
-function rowHTML(r,done){var fin=done?'<span class="fin-badge" style="font-size:10px;padding:3px 7px"><i class="ti ti-circle-check"></i>Fin.</span>':'';return'<tr class="'+(done?'done-row':'')+'"><td><span class="mono">'+r.num+'</span></td><td>'+descHTML(r.desc)+'</td><td><span class="muted">'+isoToDisp(r.date)+'</span></td><td><span class="'+(r.pc?'mono':'muted')+'">'+(r.pc||'—')+'</span></td><td>'+pillHTML(r.rec,r.id,'rec')+'</td><td>'+pillHTML(r.lan,r.id,'lan')+'</td><td><span class="muted">'+(r.previsao?isoToDisp(r.previsao):'—')+'</span></td><td><div class="act-row">'+fin+'<button class="icn-btn" onclick="openModal(\''+r.id+'\')" title="Editar"><i class="ti ti-edit"></i></button><button class="icn-btn" onclick="delReq(\''+r.id+'\')" title="Excluir"><i class="ti ti-trash"></i></button></div></td></tr>'}
-function allRowHTML(r){return'<tr><td><span class="mono">'+r.num+'</span></td><td>'+descHTML(r.desc)+'</td><td><span class="muted">'+isoToDisp(r.date)+'</span></td><td><span class="'+(r.pc?'mono':'muted')+'">'+(r.pc||'—')+'</span></td><td>'+pillHTML(r.rec,r.id,'rec')+'</td><td>'+pillHTML(r.lan,r.id,'lan')+'</td><td><span class="muted">'+(r.previsao?isoToDisp(r.previsao):'—')+'</span></td><td>'+situacaoHTML(r)+'</td><td><div class="act-row"><button class="icn-btn" onclick="openModal(\''+r.id+'\')" title="Editar"><i class="ti ti-edit"></i></button><button class="icn-btn" onclick="delReq(\''+r.id+'\')" title="Excluir"><i class="ti ti-trash"></i></button></div></td></tr>'}
+function rowHTML(r,done){var fin=done?'<span class="fin-badge" style="font-size:10px;padding:3px 7px"><i class="ti ti-circle-check"></i>Fin.</span>':'';return'<tr class="'+(done?'done-row':'')+'"><td><span class="mono">'+r.num+'</span></td><td>'+descHTML(r.desc)+'</td><td><span class="muted">'+isoToDisp(r.date)+'</span></td><td><span class="'+(r.pc?'mono':'muted')+'">'+(r.pc||'—')+'</span></td><td>'+pillHTML(r.rec,r.id,'rec')+'</td><td>'+pillHTML(r.lan,r.id,'lan')+'</td><td><span class="muted">'+(r.previsao?isoToDisp(r.previsao):'—')+'</span></td><td><div class="act-row">'+fin+attBtns(r.id)+'<button class="icn-btn" onclick="openModal(\''+r.id+'\')" title="Editar"><i class="ti ti-edit"></i></button><button class="icn-btn" onclick="delReq(\''+r.id+'\')" title="Excluir"><i class="ti ti-trash"></i></button></div></td></tr>'}
+function allRowHTML(r){return'<tr><td><span class="mono">'+r.num+'</span></td><td>'+descHTML(r.desc)+'</td><td><span class="muted">'+isoToDisp(r.date)+'</span></td><td><span class="'+(r.pc?'mono':'muted')+'">'+(r.pc||'—')+'</span></td><td>'+pillHTML(r.rec,r.id,'rec')+'</td><td>'+pillHTML(r.lan,r.id,'lan')+'</td><td><span class="muted">'+(r.previsao?isoToDisp(r.previsao):'—')+'</span></td><td>'+situacaoHTML(r)+'</td><td><div class="act-row">'+attBtns(r.id)+'<button class="icn-btn" onclick="openModal(\''+r.id+'\')" title="Editar"><i class="ti ti-edit"></i></button><button class="icn-btn" onclick="delReq(\''+r.id+'\')" title="Excluir"><i class="ti ti-trash"></i></button></div></td></tr>'}
 function toggleStatus(id,field){var r=reqs.find(function(x){return x.id===id});r[field]=r[field]==='done'?'pending':'done';render();sheetSave('requisicoes',{id:r.id,num:r.num,descricao:r.desc||'',pc:r.pc||'',date:r.date||'',rec:r.rec,lan:r.lan,previsao:r.previsao||''},function(){showToast('Status atualizado no Sheets!')})}
-function delReq(id){if(confirm('Excluir esta requisição? Ela será removida do Google Sheets.')){reqs=reqs.filter(function(x){return x.id!==id});render();buildChart(currentDays);sheetDelete('requisicoes',id,function(){showToast('Requisição excluída!')})}}
+function delReq(id){if(confirm('Excluir esta requisição? Ela será removida do Google Sheets.')){reqs=reqs.filter(function(x){return x.id!==id});delete attachments[id];saveAttachments();render();buildChart(currentDays);sheetDelete('requisicoes',id,function(){showToast('Requisição excluída!')})}}
 function render(){
   var active=reqs.filter(function(r){return!isComplete(r)}),done=reqs.filter(function(r){return isComplete(r)});
   document.getElementById('active-body').innerHTML=active.map(function(r){return rowHTML(r,false)}).join('');
@@ -464,10 +498,12 @@ function shiftMonth(d){calM+=d;if(calM>11){calM=0;calY++}if(calM<0){calM=11;calY
 function buildCal(){document.getElementById('cal-lbl').textContent=MONTHS[calM]+' '+calY;var g=document.getElementById('cal-grid'),first=new Date(calY,calM,1).getDay(),days=new Date(calY,calM+1,0).getDate(),prev=new Date(calY,calM,0).getDate(),today=todayISO();g.innerHTML=DOWS.map(function(d){return'<div class="cal-dow">'+d+'</div>'}).join('');for(var i=0;i<first;i++)g.innerHTML+='<div class="cal-day other">'+(prev-first+1+i)+'</div>';for(var d=1;d<=days;d++){var iso=calY+'-'+pad(calM+1)+'-'+pad(d);g.innerHTML+='<div class="cal-day'+(iso===selDate?' selected':iso===today?' today':'')+'" onclick="pickDay(\''+iso+'\')">'+d+'</div>'}}
 function pickDay(iso){selDate=iso;document.getElementById('f-date-txt').value=isoToDisp(iso);closeCal()}
 document.addEventListener('click',function(e){var pop=document.getElementById('cal-popup');var btn=document.querySelector('.cal-btn');if(pop&&pop.classList.contains('open')&&!pop.contains(e.target)&&btn&&!btn.contains(e.target))closeCal()});
-function openModal(id){editId=id||null;var n=new Date();if(id){var r=reqs.find(function(x){return x.id===id});document.getElementById('f-num').value=r.num;document.getElementById('f-desc').value=r.desc||'';document.getElementById('f-pc').value=r.pc||'';document.getElementById('f-previsao').value=r.previsao||'';selDate=r.date;if(r.date){var p=r.date.split('-');calY=+p[0];calM=+p[1]-1}else{calY=n.getFullYear();calM=n.getMonth()}}else{document.getElementById('f-num').value='';document.getElementById('f-desc').value='';document.getElementById('f-pc').value='';document.getElementById('f-previsao').value='';selDate=todayISO();calY=n.getFullYear();calM=n.getMonth()}document.getElementById('modal-title').textContent=id?'Editar requisição':'Nova requisição';document.getElementById('f-date-txt').value=isoToDisp(selDate);document.getElementById('f-num').classList.remove('err');document.getElementById('modal-overlay').classList.add('open')}
+function openModal(id){editId=id||null;var n=new Date();pendingAttach={};document.getElementById('f-nf').value='';document.getElementById('f-boleto').value='';
+if(id){var r=reqs.find(function(x){return x.id===id});document.getElementById('f-num').value=r.num;document.getElementById('f-desc').value=r.desc||'';document.getElementById('f-pc').value=r.pc||'';document.getElementById('f-previsao').value=r.previsao||'';selDate=r.date;if(r.date){var p=r.date.split('-');calY=+p[0];calM=+p[1]-1}else{calY=n.getFullYear();calM=n.getMonth()}var ea=attachments[id]||{};updateAttachZone('nf',ea.nf?ea.nf.name:null);updateAttachZone('boleto',ea.boleto?ea.boleto.name:null)}else{document.getElementById('f-num').value='';document.getElementById('f-desc').value='';document.getElementById('f-pc').value='';document.getElementById('f-previsao').value='';selDate=todayISO();calY=n.getFullYear();calM=n.getMonth();updateAttachZone('nf',null);updateAttachZone('boleto',null)}document.getElementById('modal-title').textContent=id?'Editar requisição':'Nova requisição';document.getElementById('f-date-txt').value=isoToDisp(selDate);document.getElementById('f-num').classList.remove('err');document.getElementById('modal-overlay').classList.add('open')}
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');closeCal()}
 document.getElementById('modal-overlay').addEventListener('click',function(e){if(e.target===this)closeModal()});
-function saveReq(){var num=document.getElementById('f-num').value.trim(),desc=document.getElementById('f-desc').value.trim(),pc=document.getElementById('f-pc').value.trim(),previsao=document.getElementById('f-previsao').value;if(!num){document.getElementById('f-num').classList.add('err');document.getElementById('f-num').focus();return}document.getElementById('f-num').classList.remove('err');var id=editId||uid();var obj={id:id,num:num,desc:desc,pc:pc,date:selDate||todayISO(),rec:'pending',lan:'pending',previsao:previsao};if(editId){var r=reqs.find(function(x){return x.id===editId});obj.rec=r.rec;obj.lan=r.lan;r.num=num;r.desc=desc;r.pc=pc;r.date=selDate||todayISO();r.previsao=previsao}else reqs.push(obj);render();buildChart(currentDays);setBtnLoading('btn-modal-save',true);sheetSave('requisicoes',{id:obj.id,num:obj.num,descricao:obj.desc||'',pc:obj.pc||'',date:obj.date,rec:obj.rec,lan:obj.lan,previsao:obj.previsao||''},function(err){setBtnLoading('btn-modal-save',false);showToast(err?'Erro ao salvar no Sheets!':editId?'Atualizado no Sheets!':'Salvo no Sheets!',!!err);closeModal()})}
+function saveReq(){var num=document.getElementById('f-num').value.trim(),desc=document.getElementById('f-desc').value.trim(),pc=document.getElementById('f-pc').value.trim(),previsao=document.getElementById('f-previsao').value;if(!num){document.getElementById('f-num').classList.add('err');document.getElementById('f-num').focus();return}document.getElementById('f-num').classList.remove('err');var id=editId||uid();var obj={id:id,num:num,desc:desc,pc:pc,date:selDate||todayISO(),rec:'pending',lan:'pending',previsao:previsao};if(editId){var r=reqs.find(function(x){return x.id===editId});obj.rec=r.rec;obj.lan=r.lan;r.num=num;r.desc=desc;r.pc=pc;r.date=selDate||todayISO();r.previsao=previsao}else reqs.push(obj);if(Object.keys(pendingAttach).length){attachments[id]=attachments[id]||{};if(pendingAttach.nf)attachments[id].nf=pendingAttach.nf;if(pendingAttach.boleto)attachments[id].boleto=pendingAttach.boleto;saveAttachments()}
+render();buildChart(currentDays);setBtnLoading('btn-modal-save',true);sheetSave('requisicoes',{id:obj.id,num:obj.num,descricao:obj.desc||'',pc:obj.pc||'',date:obj.date,rec:obj.rec,lan:obj.lan,previsao:obj.previsao||''},function(err){setBtnLoading('btn-modal-save',false);showToast(err?'Erro ao salvar no Sheets!':editId?'Atualizado no Sheets!':'Salvo no Sheets!',!!err);closeModal()})}
 function openFornModal(){document.getElementById('ff-nome').value='';document.getElementById('ff-cat').value='';document.getElementById('ff-contato').value='';document.getElementById('forn-overlay').classList.add('open')}
 function closeFornModal(){document.getElementById('forn-overlay').classList.remove('open')}
 document.getElementById('forn-overlay').addEventListener('click',function(e){if(e.target===this)closeFornModal()});
